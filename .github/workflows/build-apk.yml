@@ -17,7 +17,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          unzip -o LakshyaKhaki_Native_v20_FINAL2_FIXED.zip
+          unzip -o LakshyaKhaki_Native_v43_Personalized_Home.zip
           echo "Android project extracted"
           test -f settings.gradle.kts
           test -f app/build.gradle.kts
