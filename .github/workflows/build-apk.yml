@@ -14,17 +14,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract V44 FIXED BUILD project
+      - name: Extract Fixed V44 ZIP
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 3 -type f \
-            -name 'LakshyaKhaki_Native_v44_FIXED_BUILD.zip' \
+            -name 'LakshyaKhaki_Native_v44_FIXED_BUILD_FIXED.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "❌ LakshyaKhaki_Native_v44_FIXED_BUILD.zip not found"
+            echo "❌ Fixed V44 ZIP not found"
             exit 1
           fi
 
@@ -62,6 +62,12 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Verify Gradle and Java
+        shell: bash
+        run: |
+          java -version
+          gradle --version
+
       - name: Build Debug APK
         shell: bash
         run: |
@@ -72,9 +78,27 @@ jobs:
             --stacktrace \
             --info
 
+      - name: Check APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "📦 APK files:"
+          find app/build/outputs/apk/debug \
+            -name "*.apk" \
+            -type f \
+            -exec ls -lh {} \;
+
+          test -n "$(find app/build/outputs/apk/debug \
+            -name '*.apk' \
+            -type f \
+            -print -quit)"
+
+          echo "✅ APK successfully created"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LakshyaKhaki-V44-Debug-APK
+          name: LakshyaKhaki-V44-Fixed-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
