@@ -13,94 +13,113 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract Android project
-        shell: bash
-        run: |
-          set -e
-          unzip -o LakshyaKhaki_Native_v43_Personalized_Home.zip
-          echo "Android project extracted"
-          test -f settings.gradle.kts
-          test -f app/build.gradle.kts
-
-      - name: Fix Kotlin and KSP versions
-        shell: bash
-        run: |
-          set -e
-          echo "Keeping original Kotlin/KSP versions intact"
-
-      - name: Fix Room database configuration
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("app/src/main/java/com/lakshyakhaki/app/data/AppDatabase.kt")
-          if p.exists():
-              s = p.read_text()
-              s = s.replace(
-                  "@Database(entities = [QuizResult::class, GroundResult::class], version = 1)",
-                  "@Database(entities = [QuizResult::class, GroundResult::class], version = 1, exportSchema = false)"
-              )
-              p.write_text(s)
-              print("Room configuration fixed")
-          PY
-
-      - name: Fix Compose ListItem
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p = Path("app/src/main/java/com/lakshyakhaki/app/MainActivity.kt")
-          if p.exists():
-              s = p.read_text()
-              old = '''ListItem({Text(r.value+(if(event=="Shot Put")" m" else " sec"))},{Text(SimpleDateFormat("dd MMM, HH:mm",Locale.getDefault()).format(Date(r.timestamp)))})'''
-
-              new = '''ListItem(
-                  headlineContent = {
-                      Text(r.value + (if(event=="Shot Put") " m" else " sec"))
-                  },
-                  supportingContent = {
-                      Text(
-                          SimpleDateFormat(
-                              "dd MMM, HH:mm",
-                              Locale.getDefault()
-                          ).format(Date(r.timestamp)))
-                  }
-              )'''
-
-              if old in s:
-                  s = s.replace(old, new)
-                  p.write_text(s)
-                  print("Compose ListItem fixed")
-              else:
-                  print("ListItem pattern not found - checking whether it is already fixed")
-          PY
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
+      - name: Extract Android project from V44 ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_FILE="$(find . -maxdepth 1 -type f -name 'LakshyaKhaki_Native_v44*.zip' -print -quit)"
+
+          if [ -z "${ZIP_FILE}" ]; then
+            echo "V44 ZIP not found"
+            exit 1
+          fi
+
+          echo "Using ZIP: ${ZIP_FILE}"
+
+          rm -rf .project_extract
+          mkdir -p .project_extract
+
+          unzip -q -o "${ZIP_FILE}" -d .project_extract
+
+          PROJECT_SETTINGS="$(find .project_extract -type f -name 'settings.gradle.kts' -print -quit)"
+
+          if [ -z "${PROJECT_SETTINGS}" ]; then
+            echo "settings.gradle.kts not found after extraction"
+            exit 1
+          fi
+
+          PROJECT_ROOT="$(dirname "${PROJECT_SETTINGS}")"
+
+          echo "Detected Android project root:"
+          echo "${PROJECT_ROOT}"
+
+          # Handles ZIP subfolders such as v44_work/
+          cp -a "${PROJECT_ROOT}/." .
+
+          test -f settings.gradle.kts
+          test -f build.gradle.kts
+          test -f app/build.gradle.kts
+
+          echo "Android project prepared successfully"
+
+      - name: Verify Gradle versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -F 'id("com.android.application") version "8.7.0" apply false' build.gradle.kts
+          grep -F 'id("org.jetbrains.kotlin.android") version "2.0.21" apply false' build.gradle.kts
+          grep -F 'id("com.google.devtools.ksp") version "2.0.21-1.0.28" apply false' build.gradle.kts
+
+          if grep -R --exclude-dir=.git --exclude='*.md' "2.3.0" . 2>/dev/null; then
+            echo "ERROR: Kotlin/KSP 2.3.0 detected"
+            exit 1
+          fi
+
+          echo "Gradle versions verified"
+
+      - name: Verify Android configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -F 'compileSdk = 34' app/build.gradle.kts
+          grep -F 'targetSdk = 34' app/build.gradle.kts
+          grep -F 'minSdk = 24' app/build.gradle.kts
+          grep -F 'JavaVersion.VERSION_17' app/build.gradle.kts
+          grep -F 'jvmToolchain(17)' app/build.gradle.kts
+          grep -F 'androidx.room:room-runtime:2.6.1' app/build.gradle.kts
+          grep -F 'androidx.room:room-compiler:2.6.1' app/build.gradle.kts
+
+          echo "Android configuration verified"
+
       - name: Build Debug APK
         shell: bash
         run: |
-          set -e
-          gradle :app:assembleDebug --no-daemon --stacktrace
+          set -euo pipefail
+
+          gradle :app:assembleDebug \
+            --no-daemon \
+            --stacktrace
 
       - name: Check APK
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
+
           ls -lh app/build/outputs/apk/debug/
-          test -n "$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
-          echo "APK successfully created"
+
+          APK="$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)"
+
+          if [ -z "${APK}" ]; then
+            echo "ERROR: APK was not created"
+            exit 1
+          fi
+
+          echo "APK successfully created:"
+          echo "${APK}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
