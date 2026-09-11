@@ -1,4 +1,4 @@
-name: Build Lakshya Khaki APK
+name: Build Lakshya Khaki V44
 
 on:
   workflow_dispatch:
@@ -14,17 +14,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract V44 project
+      - name: Extract V44 FIXED BUILD project
         shell: bash
         run: |
           set -euo pipefail
 
           ZIP_FILE="$(find . -maxdepth 3 -type f \
-            -name 'LakshyaKhaki_Native_v44*.zip' \
+            -name 'LakshyaKhaki_Native_v44_FIXED_BUILD.zip' \
             -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "❌ V44 ZIP not found"
+            echo "❌ LakshyaKhaki_Native_v44_FIXED_BUILD.zip not found"
             exit 1
           fi
 
@@ -62,38 +62,15 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare Gradle
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            echo "✅ Gradle wrapper found"
-          else
-            echo "⚠️ gradlew not found"
-            echo "Using installed Gradle 8.9"
-          fi
-
       - name: Build Debug APK
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-
-            ./gradlew :app:assembleDebug \
-              --no-daemon \
-              --stacktrace \
-              --info
-
-          else
-            gradle :app:assembleDebug \
-              --no-daemon \
-              --stacktrace \
-              --info
-          fi
+          gradle :app:assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
