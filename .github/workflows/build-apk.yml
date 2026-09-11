@@ -26,9 +26,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          sed -i 's/2\.0\.21-1\.0\.28/2.3.0/g' build.gradle.kts app/build.gradle.kts
-          sed -i 's/2\.0\.21/2.3.0/g' build.gradle.kts app/build.gradle.kts
-          echo "Kotlin and KSP versions updated"
+          echo "Keeping original Kotlin/KSP versions intact"
 
       - name: Fix Room database configuration
         shell: bash
@@ -37,15 +35,14 @@ jobs:
           from pathlib import Path
 
           p = Path("app/src/main/java/com/lakshyakhaki/app/data/AppDatabase.kt")
-          s = p.read_text()
-
-          s = s.replace(
-              "@Database(entities = [QuizResult::class, GroundResult::class], version = 1)",
-              "@Database(entities = [QuizResult::class, GroundResult::class], version = 1, exportSchema = false)"
-          )
-
-          p.write_text(s)
-          print("Room configuration fixed")
+          if p.exists():
+              s = p.read_text()
+              s = s.replace(
+                  "@Database(entities = [QuizResult::class, GroundResult::class], version = 1)",
+                  "@Database(entities = [QuizResult::class, GroundResult::class], version = 1, exportSchema = false)"
+              )
+              p.write_text(s)
+              print("Room configuration fixed")
           PY
 
       - name: Fix Compose ListItem
@@ -55,29 +52,29 @@ jobs:
           from pathlib import Path
 
           p = Path("app/src/main/java/com/lakshyakhaki/app/MainActivity.kt")
-          s = p.read_text()
+          if p.exists():
+              s = p.read_text()
+              old = '''ListItem({Text(r.value+(if(event=="Shot Put")" m" else " sec"))},{Text(SimpleDateFormat("dd MMM, HH:mm",Locale.getDefault()).format(Date(r.timestamp)))})'''
 
-          old = '''ListItem({Text(r.value+(if(event=="Shot Put")" m" else " sec"))},{Text(SimpleDateFormat("dd MMM, HH:mm",Locale.getDefault()).format(Date(r.timestamp)))})'''
+              new = '''ListItem(
+                  headlineContent = {
+                      Text(r.value + (if(event=="Shot Put") " m" else " sec"))
+                  },
+                  supportingContent = {
+                      Text(
+                          SimpleDateFormat(
+                              "dd MMM, HH:mm",
+                              Locale.getDefault()
+                          ).format(Date(r.timestamp)))
+                  }
+              )'''
 
-          new = '''ListItem(
-              headlineContent = {
-                  Text(r.value + (if(event=="Shot Put") " m" else " sec"))
-              },
-              supportingContent = {
-                  Text(
-                      SimpleDateFormat(
-                          "dd MMM, HH:mm",
-                          Locale.getDefault()
-                      ).format(Date(r.timestamp)))
-              }
-          )'''
-
-          if old not in s:
-              print("ListItem pattern not found - checking whether it is already fixed")
-          else:
-              s = s.replace(old, new)
-              p.write_text(s)
-              print("Compose ListItem fixed")
+              if old in s:
+                  s = s.replace(old, new)
+                  p.write_text(s)
+                  print("Compose ListItem fixed")
+              else:
+                  print("ListItem pattern not found - checking whether it is already fixed")
           PY
 
       - name: Set up JDK 17
