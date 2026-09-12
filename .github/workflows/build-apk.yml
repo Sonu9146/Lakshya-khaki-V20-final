@@ -11,50 +11,61 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Extract Android Project ZIP
       - name: Extract V44 Project ZIP
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP_FILE="$(find . -maxdepth 3 -type f \
-            -name 'LakshyaKhaki_V44_Gradle8.9_AGP8.7_FIXED.zip' \
-            -print -quit)"
+          ZIP_FILE="$(find . -maxdepth 2 -type f -name '*.zip' -print -quit)"
 
           if [ -z "$ZIP_FILE" ]; then
             echo "❌ V44 ZIP not found"
             exit 1
           fi
 
-          echo "✅ Found: $ZIP_FILE"
+          echo "✅ Found ZIP: $ZIP_FILE"
 
-          rm -rf .project_extract
-          mkdir -p .project_extract
+          rm -rf .tmp_extract
+          mkdir -p .tmp_extract
 
-          unzip -q -o "$ZIP_FILE" -d .project_extract
+          unzip -q -o "$ZIP_FILE" -d .tmp_extract
 
-          SETTINGS_FILE="$(find .project_extract \
-            -type f \
-            -name 'settings.gradle.kts' \
-            -print -quit)"
+          SETTINGS_FILE="$(find .tmp_extract -type f \( \
+            -name 'settings.gradle.kts' -o \
+            -name 'settings.gradle' \
+          \) -print -quit)"
 
           if [ -z "$SETTINGS_FILE" ]; then
-            echo "❌ settings.gradle.kts not found"
+            echo "❌ settings.gradle.kts not found inside ZIP"
             exit 1
           fi
 
           PROJECT_ROOT="$(dirname "$SETTINGS_FILE")"
 
-          cp -a "$PROJECT_ROOT/." .
+          echo "✅ Project root: $PROJECT_ROOT"
+
+          cp -a "$PROJECT_ROOT"/. ./
+
+          rm -rf .tmp_extract
 
           echo "✅ Android project extracted"
 
-      - name: Verify Gradle Wrapper
+      # 3. Verify Gradle Wrapper
+      - name: Verify Gradle 8.9
         shell: bash
         run: |
           set -euo pipefail
+
+          if [ ! -f "gradle/wrapper/gradle-wrapper.properties" ]; then
+            echo "❌ Gradle wrapper not found"
+            exit 1
+          fi
 
           cat gradle/wrapper/gradle-wrapper.properties
 
@@ -63,27 +74,43 @@ jobs:
 
           echo "✅ Gradle 8.9 verified"
 
-      - name: Verify AGP
+      # 4. Verify AGP
+      - name: Verify AGP 8.7.0
         shell: bash
         run: |
           set -euo pipefail
 
+          if [ ! -f "build.gradle.kts" ]; then
+            echo "❌ Root build.gradle.kts not found"
+            exit 1
+          fi
+
           grep -q 'com.android.application.*8.7.0' \
             build.gradle.kts
 
-          echo "✅ AGP 8.7.0 verified"
+          echo "✅ Android Gradle Plugin 8.7.0 verified"
 
+      # 5. Setup JDK 17
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 6. Setup Gradle 8.9
       - name: Setup Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
+      # 7. Show environment
+      - name: Check Java and Gradle
+        shell: bash
+        run: |
+          java -version
+          gradle --version
+
+      # 8. Build Debug APK
       - name: Build Debug APK
         shell: bash
         run: |
@@ -93,14 +120,15 @@ jobs:
             --no-daemon \
             --stacktrace
 
+      # 9. Check APK
       - name: Check APK
         shell: bash
         run: |
           set -euo pipefail
 
           APK="$(find app/build/outputs/apk/debug \
-            -name '*.apk' \
             -type f \
+            -name '*.apk' \
             -print -quit)"
 
           if [ -z "$APK" ]; then
@@ -108,12 +136,13 @@ jobs:
             exit 1
           fi
 
-          echo "✅ APK created:"
+          echo "✅ APK successfully created:"
           ls -lh "$APK"
 
-      - name: Upload APK
+      # 10. Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: LakshyaKhaki-V44-Gradle8.9-APK
+          name: LakshyaKhaki-V44-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
